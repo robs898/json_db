@@ -25,22 +25,24 @@ func (db *DB) save() error {
 }
 
 func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
-	//body := r.FormValue("body")
 	decoder := json.NewDecoder(r.Body)
 	var birthday Birthday
 	err := decoder.Decode(&birthday)
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var birthdays []Birthday
+	birthdays = append(birthdays, birthday)
+	log.Println(birthdays)
+	db := DB{
+		User: title,
+		Birthdays: birthdays,
+	}
+	err2 := db.save()
+	if err2 != nil {
 		panic(err)
 	}
-	birthdays := []Birthday
-	append.(birthdays, birthday)
-	db := &DB{User: title, Birthdays: birthdays)}
-	err := db.save()
-	//if err != nil {
-//		http.Error(w, err.Error(), http.StatusInternalServerError)
-//		return
-//	}
-	//http.Redirect(w, r, "/view/"+title, http.StatusFound)
 }
 
 var validPath = regexp.MustCompile("^/(save|view)/([a-zA-Z0-9]+)$")
