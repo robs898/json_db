@@ -48,6 +48,8 @@ func mainHandle(w http.ResponseWriter, r *http.Request) {
 		log.Println(bday)
 	} else if r.Method == "GET" {
 		log.Println(r.Method)
+		bday := getDb(w, user)
+		log.Println(bday)
 	}
 	//birthdays := Birthdays{
 	//	Birthday{Name: "dave"},
