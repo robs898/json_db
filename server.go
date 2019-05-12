@@ -18,10 +18,28 @@ type DB struct {
 	Birthdays	[]Birthday
 }
 
+func view(user string) ([]byte, error) {
+	filename := "data/" + user + ".json"
+	log.Println(filename)
+	return ioutil.ReadFile(filename)
+}
+
 func (db *DB) save() error {
 	filename := "data/" + db.User + ".json"
 	json, _ := json.Marshal(db)
 	return ioutil.WriteFile(filename, json, 0600)
+}
+
+func viewHandler(w http.ResponseWriter, r *http.Request, title string) DB {
+	byte_file, err := view(title)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var db DB
+	json.Unmarshal(byte_file, &db)
+	http.Return
+	return
 }
 
 func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
@@ -60,5 +78,7 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 
 func main() {
 	http.HandleFunc("/save/", makeHandler(saveHandler))
+	http.HandleFunc("/view/", makeHandler(viewHandler))
+	http.HandleFunc("/view/", ServeFile(w http.ResponseWriter, *http.Request, string))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
