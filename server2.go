@@ -24,12 +24,14 @@ func getUser(w http.ResponseWriter, r *http.Request) string {
 	return m[1]
 }
 
-func getDb(w http.ResponseWriter, user string) Birthday {
+func getDb(w http.ResponseWriter, user string, ignoreError bool) Birthday {
 	var db Birthday
 	filename := "data/" + user + ".json"
 	byteFile, err := ioutil.ReadFile(filename)
 	if err != nil {
-		http.Error(w, "User db not found", 404)
+		if ! ignoreError {
+			http.Error(w, "User db not found", 404)
+		}
 		return db
 	}
 	err2 := json.Unmarshal(byteFile, &db)
@@ -40,15 +42,29 @@ func getDb(w http.ResponseWriter, user string) Birthday {
 	return db
 }
 
+func parseData() {
+	decoder := json.NewDecoder(r.Body)
+	        var birthday Birthday
+		        err := decoder.Decode(&birthday)
+}
+
+func createDb(bday Birthday, user string) {
+	filename := "data/" + user + ".json"
+	json, _ := json.Marshal(bday)
+	return ioutil.WriteFile(filename, json, 0600)
+}
+
 func mainHandle(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		user := getUser(w, r)
 		log.Println("Current user:", user)
-		bday := getDb(w, user)
+		bday := getDb(w, user, true)
 		log.Println(bday)
+
 	} else if r.Method == "GET" {
+		user := getUser(w, r)
 		log.Println(r.Method)
-		bday := getDb(w, user)
+		bday := getDb(w, user, false)
 		log.Println(bday)
 	}
 	//birthdays := Birthdays{
