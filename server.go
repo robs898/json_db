@@ -9,76 +9,94 @@ import (
 )
 
 type Birthday struct {
-	FirstName, LastName string
-	Day, Month, Year int
+	Name string
 }
 
-type DB struct {
-	User		string
-	Birthdays	[]Birthday
-}
+type Birthdays []Birthday
 
-func view(user string) ([]byte, error) {
-	filename := "data/" + user + ".json"
-	log.Println(filename)
-	return ioutil.ReadFile(filename)
-}
-
-func (db *DB) save() error {
-	filename := "data/" + db.User + ".json"
-	json, _ := json.Marshal(db)
-	return ioutil.WriteFile(filename, json, 0600)
-}
-
-func viewHandler(w http.ResponseWriter, r *http.Request, title string) DB {
-	byte_file, err := view(title)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+func getUser(w http.ResponseWriter, r *http.Request) string {
+	var validPath = regexp.MustCompile("^/([a-zA-Z0-9]+)$")
+	m := validPath.FindStringSubmatch(r.URL.Path)
+	if m == nil {
+		return ""
 	}
-	var db DB
-	json.Unmarshal(byte_file, &db)
-	http.Return
-	return
+	return m[1]
 }
 
-func saveHandler(w http.ResponseWriter, r *http.Request, title string) {
+func getDB(w http.ResponseWriter, user string) (Birthdays, error) {
+	var db Birthdays
+	filename := user + ".json"
+	byteFile, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Println("readfile fail")
+		return db, err
+	}
+	err2 := json.Unmarshal(byteFile, &db)
+	if err2 != nil {
+		log.Println("marshal fail")
+		return db, err2
+	}
+	return db, nil
+}
+
+func parseData(w http.ResponseWriter, r *http.Request) (Birthday, error) {
 	decoder := json.NewDecoder(r.Body)
 	var birthday Birthday
 	err := decoder.Decode(&birthday)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return birthday, err
 	}
-	var birthdays []Birthday
-	birthdays = append(birthdays, birthday)
-	log.Println(birthdays)
-	db := DB{
-		User: title,
-		Birthdays: birthdays,
-	}
-	err2 := db.save()
-	if err2 != nil {
-		panic(err)
-	}
+	return birthday, nil
 }
 
-var validPath = regexp.MustCompile("^/(save|view)/([a-zA-Z0-9]+)$")
+func writeDB(bdays Birthdays, user string) error {
+	filename := user + ".json"
+	json, _ := json.Marshal(bdays)
+	return ioutil.WriteFile(filename, json, 0600)
+}
 
-func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		m := validPath.FindStringSubmatch(r.URL.Path)
-		if m == nil {
-			http.NotFound(w, r)
-			return
+func mainHandle(w http.ResponseWriter, r *http.Request) {
+	log.Println("INFO", r.Method, r.URL.Path)
+	if r.Method == "POST" {
+		user := getUser(w, r)
+		db, err := getDB(w, user)
+		if err != nil {
+			log.Println("INFO no existing db for user", user)
 		}
-		fn(w, r, m[2])
+		log.Println("existing db", db)
+		data, err2 := parseData(w, r)
+		if err2 != nil {
+			log.Println("ERROR invalid JSON", data)
+			http.Error(w, "invalid JSON", 400)
+		}
+		log.Println("new data", data)
+		bdays := append(db, data)
+		log.Println("all bdays", bdays)
+		err3 := writeDB(bdays, user)
+		if err3 != nil {
+			log.Println("ERROR failed to write bdays to file", bdays)
+			http.Error(w, "failed to write db", 500)
+		} else {
+			json.NewEncoder(w).Encode(bdays)
+		}
+	} else if r.Method == "GET" {
+		user := getUser(w, r)
+		if user == "" {
+			log.Println("ERROR invalid user", user)
+			http.Error(w, "invalid user", 400)
+		} else {
+			db, err := getDB(w, user)
+			if err != nil {
+				log.Println("ERROR no db found for", user)
+				http.Error(w, "no found db for user", 404)
+			} else {
+				json.NewEncoder(w).Encode(db)
+			}
+		}
 	}
 }
 
 func main() {
-	http.HandleFunc("/save/", makeHandler(saveHandler))
-	http.HandleFunc("/view/", makeHandler(viewHandler))
-	http.HandleFunc("/view/", ServeFile(w http.ResponseWriter, *http.Request, string))
+	http.HandleFunc("/", mainHandle)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
