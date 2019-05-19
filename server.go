@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -57,6 +58,7 @@ func writeDB(bdays Birthdays, user string) error {
 
 func mainHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("INFO", r.Method, r.URL.Path)
+	w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 	if r.Method == "POST" {
 		user := getUser(w, r)
 		db, err := getDB(w, user)
@@ -97,6 +99,24 @@ func mainHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/", mainHandle)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", mainHandle)
+	cfg := &tls.Config{
+		MinVersion:               tls.VersionTLS12,
+		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		},
+	}
+	srv := &http.Server{
+		Addr:         ":8443",
+		Handler:      mux,
+		TLSConfig:    cfg,
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
+	}
+	log.Fatal(srv.ListenAndServeTLS("server.crt", "server.key"))
 }
