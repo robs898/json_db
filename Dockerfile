@@ -7,4 +7,6 @@ RUN go install -v ./...
 
 FROM gcr.io/distroless/base
 COPY --from=build /go/bin/app /
+COPY server.crt /
+COPY server.key /
 CMD ["/app"]

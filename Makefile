@@ -1,21 +1,11 @@
-build: server.go
-	go fmt
-	go build server.go
+server.key:
+	openssl req -x509 -nodes -newkey rsa:2048 -keyout server.key -out server.crt -days 3650 -subj '/CN=robbie.casa'
 
-run: server.go
+run: server.key
 	go fmt
-	go run server.go
-
-certs:
-	-rm -rf server.key server.crt
-	openssl req -x509 -nodes -newkey rsa:2048 -keyout server.key -out server.crt -days 3650
+	sudo docker build -t json_db .
+	sudo docker run --rm -p 8443:8443 json_db
 
 clean:
-	-rm -rf json_db
 	-rm -rf server.key server.crt
-
-clean-db:
-	-rm -rf *.json
-
-docker-build: Dockerfile
-	docker build -t json_db .
+	-sudo docker rmi json_db

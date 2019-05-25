@@ -7,21 +7,26 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"text/template"
 )
 
 type Birthday struct {
-	Name string
+	FirstName string
+	LastName  string
+	Day       int
+	Month     int
+	Year      int
 }
 
 type Birthdays []Birthday
 
 func getUser(w http.ResponseWriter, r *http.Request) string {
-	var validPath = regexp.MustCompile("^/([a-zA-Z0-9]+)$")
+	var validPath = regexp.MustCompile("^/(api/)?([a-zA-Z0-9]+)$")
 	m := validPath.FindStringSubmatch(r.URL.Path)
 	if m == nil {
 		return ""
 	}
-	return m[1]
+	return m[2]
 }
 
 func getDB(w http.ResponseWriter, user string) (Birthdays, error) {
@@ -56,8 +61,8 @@ func writeDB(bdays Birthdays, user string) error {
 	return ioutil.WriteFile(filename, json, 0600)
 }
 
-func mainHandle(w http.ResponseWriter, r *http.Request) {
-	log.Println("INFO", r.Method, r.URL.Path)
+func apiHandle(w http.ResponseWriter, r *http.Request) {
+	log.Println("INFO API", r.Method, r.URL.Path)
 	w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 	if r.Method == "POST" {
 		user := getUser(w, r)
@@ -98,9 +103,35 @@ func mainHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func htmlHandle(w http.ResponseWriter, r *http.Request) {
+	log.Println("INFO HTML", r.Method, r.URL.Path)
+	w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+	if r.Method == "GET" {
+		user := getUser(w, r)
+		if user == "" {
+			log.Println("ERROR invalid user", user)
+			http.Error(w, "invalid user", 400)
+		} else {
+			db, err := getDB(w, user)
+			if err != nil {
+				log.Println("ERROR no db found for", user)
+				http.Error(w, "no found db for user", 404)
+			} else {
+				t, err := template.New("index").Parse(`{{define "T"}} {{range .}}<p>{{ .FirstName }} {{ .LastName }}<p>{{end}} {{end}}`)
+				err = t.ExecuteTemplate(w, "T", db)
+				if err != nil {
+					log.Println("ERROR failed to render template", err)
+					http.Error(w, "failed to render template", 500)
+				}
+			}
+		}
+	}
+}
+
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", mainHandle)
+	mux.HandleFunc("/", htmlHandle)
+	mux.HandleFunc("/api/", apiHandle)
 	cfg := &tls.Config{
 		MinVersion:               tls.VersionTLS12,
 		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
