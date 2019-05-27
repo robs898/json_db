@@ -106,22 +106,21 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 func htmlHandle(w http.ResponseWriter, r *http.Request) {
 	log.Println("INFO HTML", r.Method, r.URL.Path)
 	w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+	var templates = template.Must(template.ParseFiles("user.html"))
 	if r.Method == "GET" {
 		user := getUser(w, r)
 		if user == "" {
-			log.Println("ERROR invalid user", user)
-			http.Error(w, "invalid user", 400)
+			http.ServeFile(w, r, "index.html")
 		} else {
 			db, err := getDB(w, user)
 			if err != nil {
 				log.Println("ERROR no db found for", user)
 				http.Error(w, "no found db for user", 404)
 			} else {
-				t, err := template.New("index").Parse(`{{define "T"}} {{range .}}<p>{{ .FirstName }} {{ .LastName }}<p>{{end}} {{end}}`)
-				err = t.ExecuteTemplate(w, "T", db)
+				err := templates.ExecuteTemplate(w, "user.html", db)
 				if err != nil {
 					log.Println("ERROR failed to render template", err)
-					http.Error(w, "failed to render template", 500)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
 				}
 			}
 		}
